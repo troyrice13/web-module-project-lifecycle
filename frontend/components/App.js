@@ -1,8 +1,9 @@
 import React from 'react';
 import Form from './Form';
 import TodoList from './TodoList';
+import axios from 'axios';
 
-const URL = 'http://localhost:9000/api/todos'
+const URL = 'http://localhost:9000/api/todos';
 
 export default class App extends React.Component {
   constructor() {
@@ -10,70 +11,47 @@ export default class App extends React.Component {
     this.state = {
       todos: [],
       showCompleted: true,
-    }
+    };
   }
 
   addTodo = (todoText) => {
-    const todo = { id: Date.now(), name: todoText, completed: false };
-    this.setState(prevState => ({
-      todos: [...prevState.todos, todo]
-    }), () => {
-      fetch(URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(todo)
-      })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to create todo');
-        }
-        return res.json();
-      })
-      .then(({ todo }) => {
-        this.setState(prevState => ({
-          todos: prevState.todos.map(t => t.id === todo.id ? todo : t)
-        }))
-      })
-      .catch(err => {
-        console.error(err);
-        this.setState(prevState => ({
-          todos: prevState.todos.filter(t => t.id !== todo.id)
-        }))
+    const newTodo = { name: todoText, completed: false };
+    this.postNewTodo(newTodo).then((postedTodo) => {
+      this.setState(prevState => ({
+        todos: [...prevState.todos, postedTodo]
+      }));
+    }).catch(error => console.error("Failed to add todo:", error));
+  };
+
+  postNewTodo = (todo) => {
+    return axios.post(URL, todo)
+      .then(response => response.data)
+      .catch(error => {
+        throw new Error("There was an error posting the new todo:", error);
       });
-    });
   };
 
   toggleTodo = (id) => {
-    this.setState(prevState => ({
-      todos: prevState.todos.map(todo =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      ),
-    }), () => {
-      const todo = this.state.todos.find(t => t.id === id);
-      fetch(`${URL}/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ completed: todo.completed }),
-      })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to update todo');
+    this.setState(prevState => {
+      const todos = prevState.todos.map(todo => {
+        if (todo.id === id) {
+          const updatedTodo = { ...todo, completed: !todo.completed };
+          this.toggleCompleted(updatedTodo); // Call to patch the updated todo
+          return updatedTodo;
         }
-        return res.json();
-      })
-      .catch(err => {
-        console.error(err);
-        this.setState(prevState => ({
-          todos: prevState.todos.map(t =>
-            t.id === id ? { ...t, completed: !t.completed } : t
-          ),
-        }));
+        return todo;
       });
+      return { todos };
     });
+  };
+
+  toggleCompleted = (todo) => {
+    axios.patch(`${URL}/${todo.id}`, { completed: todo.completed })
+      .then(response => {
+        // Optionally update todo in state if needed, based on response
+        console.log("Todo updated successfully", response.data);
+      })
+      .catch(error => console.error("Failed to update todo:", error));
   };
 
   toggleShowCompleted = () => {
@@ -83,12 +61,9 @@ export default class App extends React.Component {
   };
 
   componentDidMount() {
-    const getTodos = () => {
-      fetch(URL)
-        .then((res) => res.json())
-        .then((todos) => this.setState({ todos: todos.data }))
-    }
-    getTodos();
+    axios.get(URL)
+      .then((response) => this.setState({ todos: response.data.data }))
+      .catch((error) => console.error("There was an error fetching the todos:", error));
   }
 
   render() {
